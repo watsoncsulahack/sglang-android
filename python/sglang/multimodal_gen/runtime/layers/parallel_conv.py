@@ -107,7 +107,9 @@ def _can_fuse_causal_conv3d_cat_pad(
     cache_x: torch.Tensor | None,
     padding: list[int],
 ) -> bool:
-    if cache_x is None or fused_causal_conv3d_cat_pad is None:
+    # Fused backends are CUDA-only (see import gate above), so on MUSA and other
+    # non-CUDA platforms fall back to the cat/pad path below.
+    if not current_platform.is_cuda() or cache_x is None:
         return False
     if not x.is_cuda or not x.is_contiguous() or not cache_x.is_contiguous():
         return False

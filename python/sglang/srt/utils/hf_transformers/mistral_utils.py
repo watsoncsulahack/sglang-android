@@ -464,6 +464,17 @@ def patch_mistral_common_tokenizer(tokenizer):
     if not hasattr(tokenizer, "get_added_vocab"):
         tokenizer.get_added_vocab = lambda: {}
 
+    # Keep the old no-op pad add working on transformers 5.12 MistralCommon.
+    _orig_add_special_tokens = tokenizer.add_special_tokens
+
+    def _safe_add_special_tokens(special_tokens_dict, *args, **kwargs):
+        if set(special_tokens_dict) == {"pad_token"}:
+            tokenizer.pad_token = special_tokens_dict["pad_token"]
+            return 0
+        return _orig_add_special_tokens(special_tokens_dict, *args, **kwargs)
+
+    tokenizer.add_special_tokens = _safe_add_special_tokens
+
     # Set a chat_template containing "audio" so that sglang's content format
     # detector returns "openai" (which preserves audio_url extraction).
     if not hasattr(tokenizer, "chat_template") or tokenizer.chat_template is None:
