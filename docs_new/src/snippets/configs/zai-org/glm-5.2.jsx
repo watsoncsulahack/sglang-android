@@ -635,8 +635,9 @@ sgl-eval run aime25 \\
     },
 
     // ====================================================================
-    // NVFP4 (Blackwell Ultra) — nvidia/GLM-5.2-NVFP4 (Model Optimizer). TP4.
-    // B300: low-latency + balanced (the 4-GPU GB300 node fits the ~381 GB build).
+    // NVFP4 (Blackwell Ultra) — nvidia/GLM-5.2-NVFP4 (Model Optimizer). TP4 on GB300, TP8 on B300.
+    // B300: low-latency / balanced / high-throughput measured on a single 8xB300 node — balanced &
+    // high-throughput add DP-Attention (dp8); low-latency uses MTP 5-1-6, balanced uses a shorter MTP 2-1-3.
     // GB300: low-latency / balanced / high-throughput measured on a single 4xGB300
     // node — balanced & high-throughput add DP-Attention (dp4); low-latency uses MTP 5-1-6.
     // ====================================================================
@@ -646,14 +647,14 @@ sgl-eval run aime25 \\
       env: [],
       flags: [
         "--model-path {{MODEL_NAME}}",
-        "--tp 4",
+        "--tp 8",
         "--quantization modelopt_fp4",
         "--speculative-algorithm EAGLE",
         "--speculative-num-steps 5",
         "--speculative-eagle-topk 1",
         "--speculative-num-draft-tokens 6",
         "--chunked-prefill-size 8192",
-        "--mem-fraction-static 0.8",
+        "--mem-fraction-static 0.85",
         "--host {{HOST_IP}}",
         "--port {{PORT}}",
       ],
@@ -664,10 +665,40 @@ sgl-eval run aime25 \\
       env: [],
       flags: [
         "--model-path {{MODEL_NAME}}",
-        "--tp 4",
+        "--tp 8",
+        "--dp 8",
+        "--enable-dp-attention",
         "--quantization modelopt_fp4",
+        // Shorter draft (MTP 2-1-3) than low-latency's 5-1-6: at this concurrency the
+        // verify overhead of a long draft outweighs the accept-length gain.
+        "--speculative-algorithm EAGLE",
+        "--speculative-num-steps 2",
+        "--speculative-eagle-topk 1",
+        "--speculative-num-draft-tokens 3",
+        // Two required flags for DP-Attention + MTP here: `decode`-mode spec attention
+        // avoids a CUDA-graph capture deadlock, and max-running 256 lifts the default
+        // ~48-request throttle so DP-Attention can fill all 8 ranks.
+        "--speculative-attention-mode decode",
+        "--max-running-requests 256",
         "--chunked-prefill-size 8192",
-        "--mem-fraction-static 0.8",
+        "--mem-fraction-static 0.85",
+        "--host {{HOST_IP}}",
+        "--port {{PORT}}",
+      ],
+    },
+    {
+      match: { hw: "b300", variant: "default", quant: "nvfp4", strategy: "high-throughput", nodes: "single" },
+      verified: true,
+      env: [],
+      flags: [
+        "--model-path {{MODEL_NAME}}",
+        "--tp 8",
+        "--dp 8",
+        "--enable-dp-attention",
+        "--quantization modelopt_fp4",
+        "--max-running-requests 1024",
+        "--chunked-prefill-size 8192",
+        "--mem-fraction-static 0.85",
         "--host {{HOST_IP}}",
         "--port {{PORT}}",
       ],
