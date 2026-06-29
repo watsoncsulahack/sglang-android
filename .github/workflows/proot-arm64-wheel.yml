@@ -56,18 +56,30 @@ jobs:
         run: |
           python -m build --wheel --no-isolation
 
-      - name: Inspect wheel
+      - name: Build source-only runtime dependency wheels
+        env:
+          CARGO_TERM_COLOR: always
+        run: |
+          python -m pip wheel --no-deps --wheel-dir python/dist outlines_core==0.1.26
+
+      - name: Inspect wheels
         run: |
           python - <<'PY'
           from pathlib import Path
           import zipfile
 
-          wheels = sorted(Path("python/dist").glob("*.whl"))
-          if len(wheels) != 1:
-              raise SystemExit(f"expected exactly one wheel, found {wheels}")
-          wheel = wheels[0]
-          print(wheel)
-          with zipfile.ZipFile(wheel) as zf:
+          wheels = {wheel.name: wheel for wheel in Path("python/dist").glob("*.whl")}
+          if not wheels:
+              raise SystemExit("no wheels found")
+          for wheel in sorted(wheels.values()):
+              print(wheel)
+
+          sglang_wheels = [
+              wheel for name, wheel in wheels.items() if name.startswith("sglang-")
+          ]
+          if len(sglang_wheels) != 1:
+              raise SystemExit(f"expected exactly one sglang wheel, found {sglang_wheels}")
+          with zipfile.ZipFile(sglang_wheels[0]) as zf:
               native = [name for name in zf.namelist() if name.endswith(".so")]
           print("native extensions:")
           for name in native:
@@ -77,11 +89,13 @@ jobs:
               for name in native
           ):
               raise SystemExit("missing sglang.srt.grpc._core native extension")
+          if not any(name.startswith("outlines_core-") for name in wheels):
+              raise SystemExit("missing outlines_core wheel")
           PY
 
-      - name: Upload wheel artifact
+      - name: Upload wheel artifacts
         uses: actions/upload-artifact@v5
         with:
-          name: sglang-proot-arm64-wheel
+          name: sglang-proot-arm64-wheels
           path: python/dist/*.whl
           if-no-files-found: error
