@@ -72,7 +72,10 @@ jobs:
           print("native extensions:")
           for name in native:
               print(f"  {name}")
-          if not any(name.endswith("sglang/srt/grpc/_core.so") for name in native):
+          if not any(
+              name.startswith("sglang/srt/grpc/_core") and name.endswith(".so")
+              for name in native
+          ):
               raise SystemExit("missing sglang.srt.grpc._core native extension")
           PY
 
